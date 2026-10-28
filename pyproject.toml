@@ -8,3 +8,8 @@ dependencies = [
     "kokoro>=0.9.4",
     "soundfile",
 ]
+
+[dependency-groups]
+bench = [
+    "kokoro-onnx>=0.6.1",
+]
