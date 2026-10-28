@@ -12,7 +12,9 @@ if sys.platform == "darwin":
 
 import numpy as np  # noqa: E402
 import soundfile as sf  # noqa: E402
+import torch  # noqa: E402
 from kokoro import KPipeline  # noqa: E402
+from kokoro.istftnet import TorchSTFT  # noqa: E402
 
 SAMPLE_RATE = 24000
 REPO_ID = "hexgrad/Kokoro-82M"
@@ -36,9 +38,58 @@ def parse_args():
         "-v", "--voice", default="af_heart", help="voice name (default: af_heart)"
     )
     parser.add_argument(
+        "-d",
+        "--device",
+        choices=["auto", "cpu", "cuda", "mps"],
+        default="auto",
+        help="device to run the model on (default: auto)",
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="log text and timing for every chunk"
     )
     return parser.parse_args()
+
+
+def pick_device(requested):
+    # Kokoro's own auto-selection only knows about CUDA, so MPS must be passed explicitly.
+    if requested != "auto":
+        return requested
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+class CPUSTFT(torch.nn.Module):
+    """Kokoro's STFT, run on the CPU while the rest of the model stays on the GPU.
+
+    PyTorch's MPS STFT makes the audio sound metallic; on the CPU the output
+    matches a pure CPU run, at about the same speed as all-MPS.
+    """
+
+    def __init__(self, stft):
+        super().__init__()
+        self.stft = stft.cpu()
+
+    def transform(self, x):
+        magnitude, phase = self.stft.transform(x.cpu())
+        return magnitude.to(x.device), phase.to(x.device)
+
+    def inverse(self, magnitude, phase):
+        audio = self.stft.inverse(magnitude.cpu(), phase.cpu())
+        return audio.to(magnitude.device)
+
+
+def move_stft_to_cpu(model):
+    generator = model.decoder.generator
+    # Reaches into Kokoro internals; fail loudly if a new version changes them.
+    if not isinstance(getattr(generator, "stft", None), TorchSTFT):
+        raise RuntimeError(
+            "Kokoro's vocoder layout changed; cannot apply the MPS STFT fix. "
+            "Use --device cpu."
+        )
+    generator.stft = CPUSTFT(generator.stft)
 
 
 def peak_rss_mb():
@@ -60,9 +111,12 @@ def main():
     log.info("Read %d characters from %s", len(text), args.input)
 
     start = time.perf_counter()
-    pipeline = KPipeline(lang_code="a", repo_id=REPO_ID)
+    pipeline = KPipeline(lang_code="a", repo_id=REPO_ID, device=pick_device(args.device))
+    device = pipeline.model.device
+    if device.type == "mps":
+        move_stft_to_cpu(pipeline.model)
     load_time = time.perf_counter() - start
-    log.info("Loaded model on %s in %.2fs", pipeline.model.device, load_time)
+    log.info("Loaded model on %s in %.2fs", device, load_time)
 
     start = time.perf_counter()
     chunks = []
