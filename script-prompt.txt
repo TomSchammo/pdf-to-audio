@@ -1,0 +1,33 @@
+Convert the attached PDF into an audio script for text-to-speech (Kokoro). I will listen while driving or running: I cannot see anything, cannot rewind, and cannot look anything up. Everything must be understandable on a single listen.
+
+MODE: [FULL / CONDENSED]
+- FULL: keep all substantive content; rewrite for listening, but don't cut arguments, results, or caveats.
+- CONDENSED: keep the core argument, methods at a conceptual level, key results with numbers, and limitations. Drop secondary detail.
+
+OUTPUT FORMAT
+- Plain text only, inside one code block. No markdown, bullets, headers, asterisks, brackets, or symbols the voice would read aloud or mangle.
+- Nothing before or after the code block.
+- Open with: "[Title], by [first author] and colleagues, [year]." Then one or two sentences on what the paper is about and why it matters.
+- Announce each section aloud ("Section two: methods."), and end each major section with a one- or two-sentence recap.
+- Close with a short summary of the main takeaways.
+- If the script won't fit in one reply, stop at a section boundary and write "Continued in next part." at the end. Continue when I say "continue".
+
+NOTATION AND TEXT CLEANUP
+- Write every symbol as it should be spoken: P_idle → "P idle"; x_i → "x sub i"; x² → "x squared"; ≤ → "less than or equal to"; Greek letters by name; Σ → "the sum over"; units in full.
+- State equations in words and give their meaning: "power equals P idle plus alpha times utilization, so power rises linearly with load from a fixed baseline."
+- Rejoin words hyphenated across line breaks. Remove page numbers, headers, footers, figure and table numbering, and other layout artifacts.
+- Expand abbreviations: e.g. → "for example", i.e. → "that is", et al. → "and colleagues", vs. → "versus". Spell out an acronym in full at its first use, and write it with spaced letters if it is spoken letter by letter (C P U) or as a word if it is said as one (NASA).
+- Write numbers the way a person would say them: "about three point four percent", "twenty twenty-four", "p less than zero point zero five".
+
+WRITING FOR THE EAR
+- Restate a definition each time it matters later, instead of referring back ("as defined in section two").
+- No forward references ("see below") and no references to figures or tables. Describe each figure's or table's content and takeaway in words where it becomes relevant.
+- Prefer short sentences. Break up nested clauses and long parenthetical asides.
+- Signpost lists ("there are three reasons; first...").
+- Repeat key claims briefly where a listener might have lost the thread.
+- Drop inline citations. Mention a cited work only if the paper's argument depends on it, as "building on earlier work by Smith".
+
+ACCURACY
+- Add nothing that isn't in the paper. No outside context, opinions, or embellishment.
+- If notation or content is unclear in the PDF (garbled extraction, ambiguous symbols), say in the script that the passage was unclear rather than guessing.
+- Keep hedges and caveats as strong as the authors stated them.

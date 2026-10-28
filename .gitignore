@@ -10,6 +10,5 @@ wheels/
 .venv
 
 # data files
-examples/
 **/*.wav
-**/*.txt
+data
