@@ -1,7 +1,9 @@
 import argparse
+import ctypes
 import logging
 import os
 import resource
+import struct
 import sys
 import time
 from pathlib import Path
@@ -98,6 +100,31 @@ def peak_rss_mb():
     return rss / 1024**2 if sys.platform == "darwin" else rss / 1024
 
 
+def footprint_mb():
+    """Physical footprint, the memory figure Activity Monitor shows. macOS only.
+
+    Unlike RSS it includes GPU allocations, which share RAM on Apple Silicon.
+    """
+    if sys.platform != "darwin":
+        return None
+    info = ctypes.create_string_buffer(256)
+    libproc = ctypes.CDLL("libproc.dylib")
+    if libproc.proc_pid_rusage(os.getpid(), 0, info) != 0:  # RUSAGE_INFO_V0
+        return None
+    # rusage_info_v0: a 16-byte UUID, then uint64 fields; ri_phys_footprint is the 8th.
+    return struct.unpack_from("Q", info, 16 + 7 * 8)[0] / 1024**2
+
+
+def gpu_memory_mb(device):
+    """GPU memory in use, or None on CPU. RSS does not include it."""
+    if device.type == "cuda":
+        return torch.cuda.max_memory_allocated(device) / 1024**2
+    if device.type == "mps":
+        # MPS has no peak counter, so this is sampled after every chunk.
+        return torch.mps.driver_allocated_memory() / 1024**2
+    return None
+
+
 def main():
     args = parse_args()
     # Third-party libraries only log warnings; our own logger is more verbose.
@@ -120,6 +147,8 @@ def main():
 
     start = time.perf_counter()
     chunks = []
+    peak_gpu = gpu_memory_mb(device)
+    peak_footprint = footprint_mb()
     chunk_start = start
     for i, (gs, ps, audio) in enumerate(
         pipeline(text, voice=args.voice, speed=args.speed)
@@ -135,6 +164,17 @@ def main():
             ps,
         )
         chunks.append(audio)
+        if device.type == "mps":
+            # Otherwise PyTorch keeps new blocks for every chunk length and
+            # memory grows by ~35 MB per chunk.
+            torch.mps.empty_cache()
+        if peak_gpu is not None:
+            peak_gpu = max(peak_gpu, gpu_memory_mb(device))
+        if peak_footprint is not None:
+            footprint = footprint_mb()
+            peak_footprint = max(peak_footprint, footprint)
+            if (i + 1) % 25 == 0:
+                log.info("After chunk %d: memory footprint %.0f MB", i + 1, footprint)
     gen_time = time.perf_counter() - start
 
     if not chunks:
@@ -158,6 +198,10 @@ def main():
         len(text) / gen_time,
         peak_rss_mb(),
     )
+    if peak_gpu is not None:
+        log.info("Peak %s memory %.0f MB", device.type.upper(), peak_gpu)
+    if peak_footprint is not None:
+        log.info("Peak memory footprint %.0f MB (as in Activity Monitor)", peak_footprint)
 
 
 if __name__ == "__main__":
