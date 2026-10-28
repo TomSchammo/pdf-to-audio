@@ -7,7 +7,19 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
     "kokoro>=0.9.4",
     "soundfile",
+    # Listed directly (kokoro already needs it) so tool.uv.sources can pick the CPU build.
+    "torch",
 ]
+
+[tool.uv.sources]
+# On Linux, PyPI's torch bundles CUDA; use the CPU-only build instead.
+# macOS wheels on PyPI have no CUDA and keep MPS support.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [dependency-groups]
 bench = [
